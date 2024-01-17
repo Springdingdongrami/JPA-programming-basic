@@ -183,3 +183,171 @@
     - JPA가 제공하는 SQL을 추상화한 객체 지향 쿼리 언어
     - select, from, where, group by, having, join 지원
     - 엔티티 객체를 대상으로 쿼리
+
+# 3. 영속성 관리 - 내부 동작 방식
+
+### 영속성 컨텍스트 1
+
+- JPA에서 가장 중요한 2가지
+    - 객체와 관계형 데이터베이스 매핑하기
+    - 영속성 컨텍스트
+
+- 영속성 컨텍스트
+    - 엔티티를 영구 저장하는 환경
+    - 논리적인 개념 - 눈에 보이지 않는다.
+    - 엔티티 매니저를 통해서 영속성 컨텍스트에 접근
+    - J2SE 환경 - 엔티티 매니저와 영속성 컨텍스트가 1:1
+
+- 엔티티의 생명주기
+    
+    ![image](https://github.com/Springdingdongrami/JPA-programming-basic/assets/66028419/64d48508-a756-404a-85a3-ca660d54a8cc)
+
+    - 비영속(new/transient)
+        
+        ```java
+        // 비영속 - 객체를 생성한 상태
+        Member member = new Member();
+        member.setId(100L);
+        member.setName("HelloJPA");
+        ```
+        
+        - 영속성 컨텍스트와 전혀 관계가 없는 새로운 상태
+    - 영속 (managed)
+        
+        ```java
+        // 영속 - 객체를 저장한 상태
+        em.persist(member);
+        ```
+        
+        - 영속성 컨텍스트에 관리되는 상태
+    - 준영속 (detached)
+        
+        ```java
+        // 준영속 - 엔티티를 영속성 컨텍스트에서 분리
+        em.detach(member);
+        ```
+        
+        - 영속성 컨텍스트에 저장되었다가 분리된 상태
+    - 삭제 (removed)
+        
+        ```java
+        // 삭제 - 객체를 삭제한 상태
+        em.remove(member);
+        ```
+        
+        - 삭제된 상태
+
+- 영속성 컨텍스트의 이점
+    - 1차 캐시
+    - 동일성 보장
+    - 트랜잭션을 지원하는 쓰기 지연
+    - 변경 감지
+    - 지연 로딩
+
+### 영속성 컨텍스트 2
+
+- 1차 캐시
+    
+    ```java
+    Member member = new Member();
+    member.setId("member1");
+    member.setUsername("회원1");
+    
+    // 1차 캐시에 저장됨
+    em.persist(member);
+    
+    // 1차 캐시에서 조회
+    Member findMember = em.find(Member.class, "member1");
+    
+    // 1차 캐시에 없음 -> 데이터베이스에서 조회 -> 1차 캐시에 저장
+    Member findMember2 = em.find(Member.class, "member2");
+    ```
+    
+
+- 영속 엔티티의 동일성 보장
+    
+    ```java
+    Member a = em.find(Member.class, "member1");
+    Member b = em.find(Member.class, "member2");
+    
+    System.out.println(a == b); // true
+    ```
+    
+
+- 트랜잭션을 지원하는 쓰기 지연
+    
+    ```java
+    EntityManagerFactory emf = Persistence.createEntityManagerFactory("hello");
+    EntityManager em = emf.createEntityManager();
+    
+    EntityTransaction tx = em.getTransaction();
+    tx.begin(); // 트랜잭션 시작
+    
+    em.persist(memberA);
+    em.persist(memberB);
+    
+    System.out.println("result = " + (findMember1 == findMember2)); // 동일성
+    
+    tx.commit(); // 커밋하는 순간 데이터베이스에 SQL을 보낸다.
+    ```
+    
+    ![image](https://github.com/Springdingdongrami/JPA-programming-basic/assets/66028419/f908bd44-1548-4427-b0c0-9cefcfd24e5d)
+
+    ![image](https://github.com/Springdingdongrami/JPA-programming-basic/assets/66028419/a8c759ec-e4d8-46dd-ad5b-e8405acf7695)
+
+
+- 엔티티 변경 감지 (Dirty Checking)
+    
+    ```java
+    EntityManagerFactory emf = Persistence.createEntityManagerFactory("hello");
+    EntityManager em = emf.createEntityManager();
+    
+    EntityTransaction tx = em.getTransaction();
+    tx.begin(); // 트랜잭션 시작
+    
+    // 영속 엔티티 조회
+    Member memberA = em.find(Member.class, "memberA");
+    
+    // 영속 엔티티 데이터 수정
+    memberA.setUsername("hi");
+    memberA.setAge(10);
+    
+    tx.commit(); // 커밋하는 순간 데이터베이스에 SQL을 보낸다.
+    ```
+    
+    ![image](https://github.com/Springdingdongrami/JPA-programming-basic/assets/66028419/25bad3c1-51c8-4df9-a521-177cdd389d0b)
+
+    - `em.update(member)` 와 같은 코드가 필요 없다.
+
+### 플러시
+
+- 플러시
+    - 영속성 컨텍스트의 변경 내용을 데이터베이스에 반영
+
+- 플러시 발생
+    - 변경 감지
+    - 수정된 엔티티 쓰기 지연 SQL 저장소에 등록
+    - 쓰기 지연 SQL 저장소의 쿼리를 데이터베이스에 전송 (등록, 수정, 삭제 쿼리)
+
+- 영속성 컨텍스트를 플러시하는 방법
+    - 직접 호출
+        - `em.flush()`
+    - 자동 호출
+        - 트랜잭션 커밋
+        - JPQL 쿼리 실행
+
+- 플러시 모드 옵션
+    - `em.setFlushMode(FlushModeType.COMMIT)`
+        - `FlushModeType.AUTO` : 커밋이나 쿼리를 실행할 때 플러시 (기본값)
+        - `FlushModeType.COMMIT` : 커밋할 때만 플러시
+
+### 준영속 상태
+
+- 준영속 상태
+    - 영속 상태의 엔티티가 영속성 컨텍스트에서 분리
+    - 영속성 컨텍스트가 제공하는 기능을 사용하지 못한다.
+
+- 준영속 상태로 만드는 방법
+    - `em.detach(entity)` : 특정 엔티티만 준영속 상태로 전환
+    - `em.clear()` : 영속성 컨텍스트를 완전히 초기화
+    - `em.close()` : 영속성 컨텍스트를 종료
